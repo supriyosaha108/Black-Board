@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/x-icon" href="https://cdn.icon-icons.com/icons2/1194/PNG/512/1490886349-11-writing-board_82501.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Board</title>
+    <style>
+        body { background-color: black; margin: 0; }
+        ::-webkit-scrollbar { background-color: black; height: 10px; width: 10px; }
+        ::-webkit-scrollbar-thumb { background-color: rgb(40, 40, 40); }
+        canvas {  background-color: black; cursor: pointer; }
+        #toolbar {
+            position: fixed;  bottom: 5px; left: 50%; transform: translateX(-50%);
+            background-color: rgb(40, 40, 40);
+            height: 50px; width: 345px; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            user-select: none;
+        }
+        .colorpalet {
+            position: relative; width: 30px; height: 30px; margin: 5px;
+            border: 2px solid white; border-radius: 4px;
+            display: inline-block; cursor: pointer;
+            background-color: black; color: grey;
+        }
+        .colorpalet:active { cursor:grabbing; background-color:rgb(181,32,0); color : white; }
+        .colorpalet:hover { transform:scale(1.1); }
+        span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);  }
+    </style>
+</head>
+
+<body>
+    <canvas id="draw"></canvas>
+    <input type="hidden" id="colorvalue" value="orange">
+    <div id="toolbar">
+        <div class="colorpalet" onclick="document.getElementById('colorvalue').value = 'orange';" style="background-color:orange;"></div>
+        <div class="colorpalet" onclick="document.getElementById('colorvalue').value = 'violet';" style="background-color:violet;"></div>
+        <div class="colorpalet" onclick="document.getElementById('colorvalue').value = 'darkgreen';" style="background-color: darkgreen;"></div>
+        <input type="file" id="imageInput" style="display:none;" accept="image/*"/>
+        <label for="imageInput" class="colorpalet"><span class="material-symbols-outlined">file_open</span></label> 
+        <div class="colorpalet" onclick="saveImage();"><span class="material-symbols-outlined" id="eraser">save</span></div>
+        <div class="colorpalet" onclick="resizeForm();"><span class="material-symbols-outlined">aspect_ratio</span></div>
+        <div class="colorpalet" onclick="cClear();window.location.reload();"><span class="material-symbols-outlined">delete</span></div>
+    </div>
+</body>
+
+<script>
+    var canvas, ctx, lasttext = 0, i, shft = 0, pos = { x: 0, y: 0 }; 
+    var cPushArray = [], cStep = -1, canvasPic;
+    canvas = document.getElementById("draw"); ctx = canvas.getContext("2d"); 
+    ctx.canvas.height = 3000; ctx.canvas.width = 1500;
+
+    // CORE FUNCTIONS
+    function setPosition(e) {
+        if(shft==1 && e.buttons === 1) {
+            if( Math.abs(e.clientX + window.scrollX - pos.x) > 15) pos.x = e.clientX + window.scrollX;
+            else if(Math.abs(e.clientY + window.scrollY - pos.y) > 15) pos.y = e.clientY + window.scrollY;      
+        }
+        else { pos.x = e.clientX + window.scrollX; pos.y = e.clientY + window.scrollY; }
+        lasttext = pos.x;
+    }
+    function draw(e) {
+        if(shft==1 && e.buttons !== 1 ) { setPosition(e); }
+        if (e.buttons !== 1 && e.buttons !== 2) return;
+        ctx.beginPath(); 
+        if(e.buttons === 1) { ctx.strokeStyle = document.getElementById('colorvalue').value;  ctx.lineWidth = 4; }   
+        else { ctx.strokeStyle = "black"; ctx.lineWidth = 15; }
+        ctx.lineJoin = "round"; 
+        ctx.moveTo(pos.x, pos.y); setPosition(e); ctx.lineTo(pos.x, pos.y);
+        ctx.closePath(); ctx.stroke();
+    }
+    function typeText(event) {
+        if(event.shiftKey) { shft = 1; }
+        if (event.ctrlKey && event.key === 'z') { cUndo(); return; }
+        else if (event.ctrlKey && event.key === 'y') { cRedo(); return; }
+        else if (event.ctrlKey && event.key === 'c') { window.location.reload(); return; }
+        else if (event.ctrlKey && event.key === 's') { event.preventDefault(); saveImage(); return; }
+        if(event.keyCode >=32 && event.key.length == 1 ) {
+            event.preventDefault()
+            if(event.keyCode == 32) {cPush();}
+            ctx.lineJoin = "round"; 
+            ctx.font = "bold 16px Monospace";
+            ctx.fillStyle = document.getElementById('colorvalue').value;
+            ctx.fillText(event.key, pos.x, pos.y);
+            pos.x = pos.x + 10;
+        }
+        else if(event.keyCode == 13) { pos.x = lasttext; pos.y = pos.y + 20; cPush(); }
+        else if(event.keyCode == 8) { ctx.fillStyle = "black"; ctx.fillRect(pos.x-10, pos.y-15, 10, 20); pos.x = pos.x - 10; }
+    }
+
+    // OPEN IMAGE, SAVE IMAGE, RESIZE IMAGE FUNCTIONS
+    function openImage(e) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const img = new Image();
+        img.onload = function () { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+        img.src = event.target.result;  cClear();
+    };
+    reader.readAsDataURL(e.target.files[0]);
+    }
+    function saveImage() {
+        var destCanvas = document.createElement("canvas");
+        destCanvas.width = canvas.width; destCanvas.height = canvas.height;
+        var destCtx = destCanvas.getContext('2d');
+        destCtx.fillStyle = "#000000"; destCtx.fillRect(0,0,destCanvas.width,destCanvas.height);
+        destCtx.drawImage(canvas, 0, 0);
+        let destcanvasUrl = destCanvas.toDataURL("image/png");
+        const createEl = document.createElement('a');
+        createEl.href = destcanvasUrl;
+        createEl.download = "Sample.png"; createEl.click(); createEl.remove(); destCanvas.remove(); cClear();
+    }
+    function resizeForm() {
+        let y1 = prompt("Enter Height", ctx.canvas.height);
+        let x1 = prompt("Enter Width", ctx.canvas.width);
+        if (x1 != null && y1!=null) { 
+            cPush();
+            ctx.canvas.width = x1; ctx.canvas.height = y1;
+            cUndo();
+            alert("Resized!"); 
+        }
+        else { alert("Invalid Size!"); }    
+    }
+
+    // PUSH, UNDO, REDO FUNCTIONS
+    function cPush() {
+        if(cStep > 200) {  cClear(); }
+
+        cStep++; if (cStep < cPushArray.length) cPushArray.length = cStep;
+        cPushArray.push(canvas.toDataURL());
+    }
+    function cUndo() {
+        if (cStep > 0) {
+            cStep--; canvasPic = new Image(); canvasPic.src = cPushArray[cStep];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvasPic.onload = function () { ctx.drawImage(canvasPic, 0, 0); }
+        }
+    }
+    function cRedo() {
+        if (cStep < cPushArray.length-1) {
+            cStep++; canvasPic = new Image(); canvasPic.src = cPushArray[cStep];
+            canvasPic.onload = function () { ctx.drawImage(canvasPic, 0, 0); }
+        }
+    }
+    function cClear() {
+        cPushArray = null;  cPushArray = []; cStep = -1; cPush(); 
+    }
+    
+    // ALL EVENT LISTENERS
+    cPush();
+    canvas.addEventListener("mousemove", draw);
+    canvas.addEventListener("mousedown", setPosition);
+    canvas.addEventListener("mouseenter", setPosition);
+    document.addEventListener("keydown", typeText);
+    imageInput.addEventListener('change', openImage);
+    canvas.addEventListener("mouseup", (event) => { cPush(); });
+    document.addEventListener("contextmenu", (event) => { event.preventDefault(); });
+    document.addEventListener("keyup", (event) => { shft = 0; });
+</script>
+</html>
